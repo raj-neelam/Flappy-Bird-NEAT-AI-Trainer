@@ -1,0 +1,1795 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Bird NEAT AI Trainer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .stats-overlay {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            font-size: 16px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            flex-shrink: 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-row {
+            margin-bottom: 0;
+        }
+
+
+        .stat-label {
+            color: #00f2fe;
+            font-weight: bold;
+        }
+
+        .container {
+            display: grid;
+            /* --- MODIFIED: Wider side panels --- */
+            grid-template-columns: 360px 1fr 380px;
+            flex: 1;
+            min-height: 0;
+            gap: 10px;
+            padding: 10px;
+        }
+
+        .panel {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            /* --- MODIFIED: Default no scroll --- */
+            overflow-y: hidden;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            min-height: 0;
+            /* --- MODIFIED: Added flex display --- */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .panel::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .panel::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+        }
+
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            /* --- MODIFIED: Left panel MUST scroll --- */
+            overflow-y: auto;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .sidebar-links {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .sidebar-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s;
+            font-size: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .sidebar-btn-github {
+            background: linear-gradient(135deg, #24292e 0%, #000 100%);
+            color: white;
+        }
+
+        .sidebar-btn-website {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .sidebar-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .btn-play {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-pause {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-reset {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 5px;
+            margin-bottom: 10px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .section-header h3 {
+            font-size: 16px;
+            color: #00f2fe;
+        }
+
+        .section-content {
+            display: none;
+        }
+
+        .section-content.active {
+            display: block;
+        }
+
+        .param-group {
+            margin-bottom: 15px;
+        }
+
+        .param-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        .tooltip {
+            position: relative;
+            cursor: help;
+            color: #00f2fe;
+            font-weight: bold;
+            margin-left: 5px;
+            display: inline-block;
+        }
+
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 50%;
+            bottom: 125%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 5px;
+            white-space: nowrap;
+            z-index: 9999;
+
+            .tooltip:hover::before {
+                content: '';
+                position: absolute;
+                left: 50%;
+                bottom: 115%;
+                transform: translateX(-50%);
+                border: 6px solid transparent;
+                border-top-color: rgba(0, 0, 0, 0.95);
+                z-index: 1000;
+            }
+
+            .param-value {
+                color: #38ef7d;
+                font-weight: bold;
+            }
+
+            input[type="range"] {
+                width: 100%;
+                height: 6px;
+                border-radius: 5px;
+                background: rgba(255, 255, 255, 0.2);
+                outline: none;
+                -webkit-appearance: none;
+            }
+
+            input[type="range"]::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                appearance: none;
+                width: 16px;
+                height: 16px;
+                border-radius: 50%;
+                background: #00f2fe;
+                cursor: pointer;
+                transition: all 0.3s;
+            }
+
+            input[type="range"]::-webkit-slider-thumb:hover {
+                background: #38ef7d;
+                transform: scale(1.2);
+            }
+
+            input[type="number"] {
+                width: 100%;
+                padding: 8px;
+                border-radius: 5px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                background: rgba(0, 0, 0, 0.3);
+                color: white;
+                font-size: 13px;
+            }
+
+            .center-panel {
+                display: flex;
+                position: relative;
+                /* --- MODIFIED --- */
+                padding: 0;
+                /* Remove panel padding */
+                overflow: hidden;
+                /* Hide any overflow */
+            }
+
+            #gameCanvas {
+                border-radius: 10px;
+                box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+                /* --- MODIFIED --- */
+                width: 100%;
+                /* Fill panel width */
+                height: 100%;
+                /* Fill panel height */
+                display: block;
+            }
+
+            .right-panel {
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .chart-container {
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 8px;
+                padding: 15px;
+                /* --- MODIFIED: Flexible height --- */
+                flex: 1;
+                min-height: 150px;
+            }
+
+            .nn-viz {
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 8px;
+                padding: 15px;
+                /* --- MODIFIED: Flexible height --- */
+                flex: 2;
+                min-height: 200px;
+            }
+
+            canvas {
+                max-width: 100%;
+            }
+
+            .btn-github {
+                background: linear-gradient(135deg, #24292e 0%, #000 100%);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+
+            .btn-website {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+            }
+
+            .footer-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+            }
+
+            @media (max-width: 1200px) {
+                .container {
+                    grid-template-columns: 1fr;
+                    grid-template-rows: auto auto auto;
+                    height: auto;
+                    padding-bottom: 80px;
+                }
+
+                .panel {
+                    max-height: none;
+                }
+
+                .chart-container {
+                    height: 200px;
+                }
+
+                .footer {
+                    flex-direction: column;
+                    gap: 10px;
+                }
+            }
+
+            .toggle-icon {
+                transition: transform 0.3s;
+            }
+
+            .toggle-icon.rotated {
+                transform: rotate(180deg);
+            }
+    </style>
+</head>
+
+<body>
+    <div class="stats-overlay">
+        <div class="stat-row"><span class="stat-label">Generation: </span><span id="genStat">0</span></div>
+        <div class="stat-row"><span class="stat-label">Score: </span><span id="scoreStat">0</span></div>
+        <div class="stat-row"><span class="stat-label">Alive: </span><span id="aliveStat">0</span></div>
+        <div class="stat-row"><span class="stat-label">Best Fitness: </span><span id="bestFitStat">0</span>
+        </div>
+        <div class="stat-row"><span class="stat-label">Species: </span><span id="speciesStat">0</span></div>
+    </div>
+
+    <div class="container">
+        <div class="panel left-panel">
+            <h2 style="color: #00f2fe; margin-bottom: 10px;">⚙️ NEAT Configuration</h2>
+
+            <div class="sidebar-links">
+                <a href="https://github.com/raj-neelam" target="_blank" class="sidebar-btn sidebar-btn-github">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                        <path
+                            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                    </svg>
+                    GitHub
+                </a>
+                <a href="https://rajgaurav.me" target="_blank" class="sidebar-btn sidebar-btn-website">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                        <path
+                            d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm5.17 7h-2.37c-.09-1.44-.41-2.77-.91-3.87 1.46.64 2.64 1.81 3.28 3.27v.6zM8 14c-.5 0-1.33-1.51-1.74-4h3.48c-.41 2.49-1.24 4-1.74 4zM6.21 9c-.07-.66-.11-1.33-.11-2s.04-1.34.11-2h3.58c.07.66.11 1.33.11 2s-.04 1.34-.11 2H6.21zm.05-7.87c-.5 1.1-.82 2.43-.91 3.87H2.98c.64-1.46 1.82-2.63 3.28-3.27v-.6zm-3.28 8.87h2.37c.09 1.44.41 2.77.91 3.87-1.46-.64-2.64-1.81-3.28-3.27v-.6zM8 2c.5 0 1.33 1.51 1.74 4H6.26C6.67 3.51 7.5 2 8 2zm1.79 11.87c.5-1.1.82-2.43.91-3.87h2.37c-.64 1.46-1.82 2.63-3.28 3.27v.6z" />
+                    </svg>
+                    Website
+                </a>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-play" id="playPauseBtn">▶️ Play</button>
+                <button class="btn btn-reset" id="resetBtn">🔄 Reset</button>
+            </div>
+
+            <div class="section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>Population Settings</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content active">
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Population Size <span class="tooltip"
+                                    data-tooltip="Number of birds in each generation">ℹ️</span></span>
+                            <span class="param-value" id="popSizeVal">30</span>
+                        </div>
+                        <input type="range" id="popSize" min="10" max="100" value="30" step="10">
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>Display Options</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content active">
+                    <div class="param-group">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="showLines" checked style="width: auto;">
+                            <span>Show Debug Lines <span class="tooltip"
+                                    data-tooltip="Show red lines from birds to pipes">ℹ️</span></span>
+                        </label>
+                    </div>
+                    <div class="param-group">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="showBestOnly" style="width: auto;">
+                            <span>Show Best Bird Only <span class="tooltip"
+                                    data-tooltip="Hide all birds except the best performer">ℹ️</span></span>
+                        </label>
+                    </div>
+                    <div class="param-group">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="showNN" checked style="width: auto;">
+                            <span>Show Neural Network <span class="tooltip"
+                                    data-tooltip="Display live neural network visualization">ℹ️</span></span>
+                        </label>
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Simulation Speed <span class="tooltip"
+                                    data-tooltip="Speed up or slow down the simulation">ℹ️</span></span>
+                            <span class="param-value" id="speedVal">1x</span>
+                        </div>
+                        <input type="range" id="speed" min="1" max="50" value="1" step="1">
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>Game Settings</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content active">
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Pipe Gap <span class="tooltip"
+                                    data-tooltip="Vertical gap between top and bottom pipes">ℹ️</span></span>
+                            <span class="param-value" id="pipeGapVal">200</span>
+                        </div>
+                        <input type="range" id="pipeGap" min="120" max="300" value="200" step="10">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Pipe Distance <span class="tooltip"
+                                    data-tooltip="Horizontal distance between pipes">ℹ️</span></span>
+                            <span class="param-value" id="pipeDistVal">400</span>
+                        </div>
+                        <input type="range" id="pipeDist" min="200" max="600" value="400" step="50">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Pipe Speed <span class="tooltip"
+                                    data-tooltip="How fast pipes move (increases difficulty)">ℹ️</span></span>
+                            <span class="param-value" id="pipeSpeedVal">3</span>
+                        </div>
+                        <input type="range" id="pipeSpeed" min="2" max="8" value="3" step="1">
+                    </div>
+                    <div class="param-group">
+                        <label style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="autoSpeed" style="width: auto;">
+                            <span>Auto-increase speed <span class="tooltip"
+                                    data-tooltip="Gradually increases pipe speed over generations">ℹ️</span></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>Mutation Rates</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content active">
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Add Connection <span class="tooltip"
+                                    data-tooltip="Probability of adding a new connection between nodes">ℹ️</span></span>
+                            <span class="param-value" id="connAddVal">0.5</span>
+                        </div>
+                        <input type="range" id="connAdd" min="0" max="1" value="0.5" step="0.1">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Delete Connection <span class="tooltip"
+                                    data-tooltip="Probability of removing an existing connection">ℹ️</span></span>
+                            <span class="param-value" id="connDelVal">0.5</span>
+                        </div>
+                        <input type="range" id="connDel" min="0" max="1" value="0.5" step="0.1">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Add Node <span class="tooltip"
+                                    data-tooltip="Probability of adding a new hidden node to the network">ℹ️</span></span>
+                            <span class="param-value" id="nodeAddVal">0.2</span>
+                        </div>
+                        <input type="range" id="nodeAdd" min="0" max="1" value="0.2" step="0.1">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Delete Node <span class="tooltip"
+                                    data-tooltip="Probability of removing a hidden node from the network">ℹ️</span></span>
+                            <span class="param-value" id="nodeDelVal">0.2</span>
+                        </div>
+                        <input type="range" id="nodeDel" min="0" max="1" value="0.2" step="0.1">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Weight Mutation <span class="tooltip"
+                                    data-tooltip="Probability of mutating connection weights">ℹ️</span></span>
+                            <span class="param-value" id="weightMutVal">0.8</span>
+                        </div>
+                        <input type="range" id="weightMut" min="0" max="1" value="0.8" step="0.1">
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>Network Structure</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content active">
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Initial Hidden Nodes <span class="tooltip"
+                                    data-tooltip="Starting number of hidden nodes (can grow with mutations)">ℹ️</span></span>
+                            <span class="param-value" id="hiddenNodesVal">2</span>
+                        </div>
+                        <input type="range" id="hiddenNodes" min="0" max="10" value="2" step="1">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Input Nodes: <span class="param-value">3</span></span>
+                        </div>
+                        <div style="font-size: 11px; color: #aaa; margin-top: 5px;">
+                            Bird Y, Top Pipe, Bottom Pipe
+                        </div>
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Output Nodes: <span class="param-value">1</span></span>
+                        </div>
+                        <div style="font-size: 11px; color: #aaa; margin-top: 5px;">
+                            Jump Decision
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <h3>Selection Settings</h3>
+                    <span class="toggle-icon">▼</span>
+                </div>
+                <div class="section-content active">
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Elitism <span class="tooltip"
+                                    data-tooltip="Number of best genomes preserved unchanged each generation">ℹ️</span></span>
+                            <span class="param-value" id="elitismVal">2</span>
+                        </div>
+                        <input type="range" id="elitism" min="0" max="10" value="2" step="1">
+                    </div>
+                    <div class="param-group">
+                        <div class="param-label">
+                            <span>Survival Rate <span class="tooltip"
+                                    data-tooltip="Percentage of population that survives to breed next generation">ℹ️</span></span>
+                            <span class="param-value" id="survivalVal">0.2</span>
+                        </div>
+                        <input type="range" id="survival" min="0.1" max="0.9" value="0.2" step="0.1">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel center-panel">
+            <canvas id="gameCanvas" height="690"></canvas>
+        </div>
+
+        <div class="panel right-panel">
+            <div class="chart-container">
+                <canvas id="fitnessChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="speciesChart"></canvas>
+            </div>
+            <div class="nn-viz">
+                <h3 style="color: #00f2fe; margin-bottom: 10px;">🧠 Best Neural Network Architecture</h3>
+                <canvas id="nnCanvas" width="300" height="350"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load sprites
+        const sprites = {
+            bg: new Image(),
+            base: new Image(),
+            bird1: new Image(),
+            bird2: new Image(),
+            bird3: new Image(),
+            pipe: new Image() // --- ADDED: Pipe sprite ---
+        };
+
+        sprites.bg.src = 'imgs/bg.png';
+        sprites.base.src = 'imgs/base.png';
+        sprites.bird1.src = 'imgs/bird1.png';
+        sprites.bird2.src = 'imgs/bird2.png';
+        sprites.bird3.src = 'imgs/bird3.png';
+        sprites.pipe.src = 'imgs/pipe.png'; // --- ADDED: Pipe sprite path ---
+
+        // Sprite loaded flag
+        let spritesLoaded = false;
+        let loadedCount = 0;
+        const TOTAL_SPRITES = 6; // --- MODIFIED: 6 sprites now ---
+
+        Object.values(sprites).forEach(img => {
+            img.onload = () => {
+                loadedCount++;
+                if (loadedCount === TOTAL_SPRITES) spritesLoaded = true;
+            };
+            img.onerror = () => {
+                // Still count as "loaded" to not break the game
+                loadedCount++;
+                if (loadedCount === TOTAL_SPRITES) spritesLoaded = true;
+            };
+        });
+
+        // Configuration
+        const config = {
+            popSize: 30,
+            connAddProb: 0.5,
+            connDelProb: 0.5,
+            nodeAddProb: 0.2,
+            nodeDelProb: 0.2,
+            weightMutRate: 0.8,
+            hiddenNodes: 2,
+            elitism: 2,
+            survivalRate: 0.2,
+            showLines: true,
+            showBestOnly: false,
+            showNN: true,
+            speed: 1,
+            pipeGap: 200,
+            pipeDistance: 400,
+            pipeSpeed: 3,
+            autoSpeed: false
+        };
+
+        // Game state
+        let gameState = {
+            running: false,
+            paused: false,
+            generation: 0,
+            score: 0,
+            birds: [],
+            pipes: [],
+            population: null,
+            bgX: 0,     // <-- ADD THIS
+            baseX: 0,   // <-- ADD THIS
+            bestGenome: null,
+            fitnessHistory: [],
+            avgFitnessHistory: [],
+            speciesHistory: [],
+            currentPipeSpeed: 3
+        };
+
+        // Canvas setup
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const nnCanvas = document.getElementById('nnCanvas');
+        const nnCtx = nnCanvas.getContext('2d');
+
+        // --- ADDED: Canvas resizing globals ---
+        const BASE_HEIGHT = 112; // Assumed height of base.png
+        let GROUND_LEVEL = 730; // Will be updated
+
+        // Charts setup
+        const fitnessChart = new Chart(document.getElementById('fitnessChart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Best Fitness',
+                    data: [],
+                    borderColor: '#38ef7d',
+                    backgroundColor: 'rgba(56, 239, 125, 0.1)',
+                    tension: 0.4,
+                    borderWidth: 2
+                }, {
+                    label: 'Avg Fitness',
+                    data: [],
+                    borderColor: '#00f2fe',
+                    backgroundColor: 'rgba(0, 242, 254, 0.1)',
+                    tension: 0.4,
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: 'white', font: { size: 11 } } },
+                    title: { display: true, text: 'Fitness Over Generations', color: 'white' }
+                },
+                scales: {
+                    x: { ticks: { color: 'white' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                    y: { ticks: { color: 'white' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                }
+            }
+        });
+
+        // --- MODIFIED: Renamed chart for Complexity ---
+        const speciesChart = new Chart(document.getElementById('speciesChart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Avg. Complexity', // --- MODIFIED
+                    data: [],
+                    borderColor: '#f5576c',
+                    backgroundColor: 'rgba(245, 87, 108, 0.1)',
+                    tension: 0.4,
+                    borderWidth: 2,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: 'white', font: { size: 11 } } },
+                    title: { display: true, text: 'AI Brain Complexity', color: 'white' } // --- MODIFIED
+                },
+                scales: {
+                    x: { ticks: { color: 'white' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                    y: {
+                        ticks: { color: 'white' },
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Enhanced NEAT Implementation with proper hidden layer support
+        class Genome {
+            constructor(inputs, outputs, hiddenNodes = 0) {
+                this.inputs = inputs;
+                this.outputs = outputs;
+                this.nodes = [];
+                this.connections = [];
+                this.fitness = 0;
+                this.nodeIdCounter = 0;
+
+                // Create input nodes
+                for (let i = 0; i < inputs; i++) {
+                    this.nodes.push({
+                        id: this.nodeIdCounter++,
+                        type: 'input',
+                        value: 0,
+                        layer: 0
+                    });
+                }
+
+                // Create hidden nodes
+                for (let i = 0; i < hiddenNodes; i++) {
+                    this.nodes.push({
+                        id: this.nodeIdCounter++,
+                        type: 'hidden',
+                        value: 0,
+                        layer: 1
+                    });
+                }
+
+                // Create output nodes
+                for (let i = 0; i < outputs; i++) {
+                    this.nodes.push({
+                        id: this.nodeIdCounter++,
+                        type: 'output',
+                        value: 0,
+                        layer: 2
+                    });
+                }
+
+                // Create initial connections (input -> hidden -> output or input -> output)
+                if (hiddenNodes > 0) {
+                    // Connect inputs to hidden
+                    for (let i = 0; i < inputs; i++) {
+                        for (let j = inputs; j < inputs + hiddenNodes; j++) {
+                            this.connections.push({
+                                from: i,
+                                to: j,
+                                weight: Math.random() * 2 - 1,
+                                enabled: true
+                            });
+                        }
+                    }
+                    // Connect hidden to outputs
+                    for (let i = inputs; i < inputs + hiddenNodes; i++) {
+                        for (let j = inputs + hiddenNodes; j < inputs + hiddenNodes + outputs; j++) {
+                            this.connections.push({
+                                from: i,
+                                to: j,
+                                weight: Math.random() * 2 - 1,
+                                enabled: true
+                            });
+                        }
+                    }
+                } else {
+                    // Direct connection input to output
+                    for (let i = 0; i < inputs; i++) {
+                        for (let j = inputs; j < inputs + outputs; j++) {
+                            this.connections.push({
+                                from: i,
+                                to: j,
+                                weight: Math.random() * 2 - 1,
+                                enabled: true
+                            });
+                        }
+                    }
+                }
+            }
+
+            activate(inputs) {
+                // Reset node values
+                this.nodes.forEach(n => n.value = 0);
+
+                // Set input values
+                for (let i = 0; i < inputs.length; i++) {
+                    // Find the input node by its ID (which is just i)
+                    const inputNode = this.nodes[i];
+                    if (inputNode && inputNode.type === 'input') {
+                        inputNode.value = inputs[i];
+                    }
+                }
+
+                // Create a map for quick node lookup by ID
+                const nodeMap = {};
+                this.nodes.forEach(n => nodeMap[n.id] = n);
+
+                // Process hidden layers
+                const hiddenNodes = this.nodes.filter(n => n.type === 'hidden');
+                for (let hidden of hiddenNodes) {
+                    let sum = 0;
+                    for (let conn of this.connections) {
+                        if (conn.enabled && conn.to === hidden.id && nodeMap[conn.from]) {
+                            sum += nodeMap[conn.from].value * conn.weight;
+                        }
+                    }
+                    hidden.value = Math.tanh(sum); // Use activation function
+                }
+
+                // Process output nodes
+                const outputNodes = this.nodes.filter(n => n.type === 'output');
+                for (let output of outputNodes) {
+                    let sum = 0;
+                    for (let conn of this.connections) {
+                        if (conn.enabled && conn.to === output.id && nodeMap[conn.from]) {
+                            sum += nodeMap[conn.from].value * conn.weight;
+                        }
+                    }
+                    output.value = Math.tanh(sum); // Use activation function
+                }
+
+                return outputNodes.map(n => n.value);
+            }
+
+            mutate() {
+                // Mutate weights
+                if (this.connections.length > 0 && Math.random() < config.weightMutRate) {
+                    const conn = this.connections[Math.floor(Math.random() * this.connections.length)];
+                    if (conn) {
+                        conn.weight += (Math.random() * 2 - 1) * 0.5;
+                        conn.weight = Math.max(-30, Math.min(30, conn.weight));
+                    }
+                }
+
+                // Add connection
+                if (Math.random() < config.connAddProb) {
+                    const possibleFrom = this.nodes.filter(n => n.type !== 'output');
+                    const possibleTo = this.nodes.filter(n => n.type !== 'input');
+
+                    if (possibleFrom.length > 0 && possibleTo.length > 0) {
+                        const from = possibleFrom[Math.floor(Math.random() * possibleFrom.length)];
+                        const to = possibleTo[Math.floor(Math.random() * possibleTo.length)];
+
+                        // Check if connection already exists
+                        const exists = this.connections.some(c => c.from === from.id && c.to === to.id);
+                        if (!exists && from.id !== to.id) {
+                            this.connections.push({
+                                from: from.id,
+                                to: to.id,
+                                weight: Math.random() * 2 - 1,
+                                enabled: true
+                            });
+                        }
+                    }
+                }
+
+                // Delete connection
+                if (Math.random() < config.connDelProb && this.connections.length > 1) {
+                    const idx = Math.floor(Math.random() * this.connections.length);
+                    this.connections.splice(idx, 1);
+                }
+
+                // Add node
+                if (Math.random() < config.nodeAddProb && this.connections.length > 0) {
+                    const conn = this.connections[Math.floor(Math.random() * this.connections.length)];
+                    const newNode = {
+                        id: this.nodeIdCounter++,
+                        type: 'hidden',
+                        value: 0,
+                        layer: 1
+                    };
+                    this.nodes.push(newNode);
+
+                    conn.enabled = false;
+                    this.connections.push({
+                        from: conn.from,
+                        to: newNode.id,
+                        weight: 1,
+                        enabled: true
+                    });
+                    this.connections.push({
+                        from: newNode.id,
+                        to: conn.to,
+                        weight: conn.weight,
+                        enabled: true
+                    });
+                }
+
+                // Delete node
+                if (Math.random() < config.nodeDelProb) {
+                    const hiddenNodes = this.nodes.filter(n => n.type === 'hidden');
+                    if (hiddenNodes.length > 0) {
+                        const nodeToRemove = hiddenNodes[Math.floor(Math.random() * hiddenNodes.length)];
+                        this.nodes = this.nodes.filter(n => n.id !== nodeToRemove.id);
+                        this.connections = this.connections.filter(c =>
+                            c.from !== nodeToRemove.id && c.to !== nodeToRemove.id
+                        );
+                    }
+                }
+            }
+
+            clone() {
+                const clone = new Genome(this.inputs, this.outputs, 0);
+                clone.nodes = JSON.parse(JSON.stringify(this.nodes));
+                clone.connections = JSON.parse(JSON.stringify(this.connections));
+                clone.nodeIdCounter = this.nodeIdCounter;
+                return clone;
+            }
+        }
+
+        class Population {
+            constructor(size, inputs, outputs, hiddenNodes) {
+                this.genomes = [];
+                for (let i = 0; i < size; i++) {
+                    this.genomes.push(new Genome(inputs, outputs, hiddenNodes));
+                }
+                this.generation = 0;
+                this.bestGenome = null;
+            }
+
+            evolve() {
+                // Sort by fitness
+                this.genomes.sort((a, b) => b.fitness - a.fitness);
+                this.bestGenome = this.genomes[0];
+
+                // Keep best genomes (elitism)
+                const newGenomes = this.genomes.slice(0, config.elitism).map(g => g.clone());
+
+                // Select survivors
+                const survivorCount = Math.floor(this.genomes.length * config.survivalRate);
+                const survivors = this.genomes.slice(0, Math.max(survivorCount, config.elitism));
+
+                // Create offspring
+                while (newGenomes.length < this.genomes.length) {
+                    const parent = survivors[Math.floor(Math.random() * survivors.length)];
+                    const child = parent.clone();
+                    child.mutate();
+                    child.fitness = 0;
+                    newGenomes.push(child);
+                }
+
+                this.genomes = newGenomes;
+                this.generation++;
+            }
+        }
+
+        // Bird class
+        class Bird {
+            constructor(genome) {
+                this.x = 100;
+                this.y = 350;
+                this.vel = 0;
+                this.genome = genome;
+                this.fitness = 0;
+                this.alive = true;
+            }
+
+            jump() {
+                this.vel = -10;
+            }
+
+            update() {
+                this.vel += 0.8; // Gravity
+                this.y += this.vel;
+
+                // --- MODIFIED: Use dynamic ground level ---
+                if (this.y > GROUND_LEVEL || this.y < 0) {
+                    this.alive = false;
+                }
+
+                if (this.alive) {
+                    this.fitness += 0.1;
+                }
+            }
+
+            draw() {
+                // Animate bird sprite
+                const frameTime = Math.floor(Date.now() / 100) % 3;
+                let birdSprite;
+
+                if (spritesLoaded) {
+                    if (frameTime === 0) birdSprite = sprites.bird1;
+                    else if (frameTime === 1) birdSprite = sprites.bird2;
+                    else birdSprite = sprites.bird3;
+
+                    ctx.save();
+                    ctx.translate(this.x, this.y);
+                    ctx.rotate(Math.min(Math.max(this.vel * 0.05, -0.5), 0.5));
+                    ctx.drawImage(birdSprite, -17, -12, 34, 24);
+                    ctx.restore();
+                } else {
+                    // Fallback if sprites not loaded
+                    ctx.fillStyle = '#FFD700';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, 15, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#FFA500';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // Pipe class
+        class Pipe {
+            constructor(x) {
+                this.x = x;
+                this.gap = config.pipeGap;
+                // --- MODIFIED: Ensure pipe gap doesn't go off-screen ---
+                this.topHeight = Math.random() * (canvas.height - this.gap - 200) + 100;
+                this.passed = false;
+            }
+
+            update() {
+                this.x -= gameState.currentPipeSpeed;
+            }
+
+            draw() {
+                if (spritesLoaded && sprites.pipe.width > 0) {
+                    const pipeSpriteHeight = sprites.pipe.height;
+                    const pipeSpriteWidth = sprites.pipe.width;
+
+                    // --- 1. Bottom pipe (drawn normally) ---
+                    ctx.drawImage(sprites.pipe, this.x, this.topHeight + this.gap, pipeSpriteWidth, pipeSpriteHeight);
+
+                    // --- 2. Top pipe (drawn inverted) ---
+                    ctx.save();
+                    // Move the canvas origin to the pipe's top-left corner
+                    ctx.translate(this.x, this.topHeight);
+                    // Scale the canvas vertically by -1 (flips it upside down)
+                    ctx.scale(1, -1);
+                    // Draw the pipe at (0, 0) relative to the new origin
+                    // It will draw "upwards" because the canvas is flipped
+                    ctx.drawImage(sprites.pipe, 0, 0, pipeSpriteWidth, pipeSpriteHeight);
+                    // Restore the canvas to its normal state
+                    ctx.restore();
+
+                } else {
+                    // Fallback drawing if sprites fail
+                    ctx.fillStyle = '#00CC00';
+                    ctx.fillRect(this.x, 0, 60, this.topHeight);
+                    ctx.strokeStyle = '#008800';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(this.x, 0, 60, this.topHeight);
+
+                    ctx.fillStyle = '#00CC00';
+                    ctx.fillRect(this.x, this.topHeight + this.gap, 60, canvas.height - this.topHeight - this.gap);
+                    ctx.strokeStyle = '#008800';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(this.x, this.topHeight + this.gap, 60, canvas.height - this.topHeight - this.gap);
+                }
+            }
+            collidesWith(bird) {
+                const pipeWidth = sprites.pipe.width || 60;
+                const pipeHeight = sprites.pipe.height || 0; // Get sprite height
+
+                if (bird.x + 15 > this.x && bird.x - 15 < this.x + pipeWidth) {
+                    // Check collision with top pipe (which ends at this.topHeight)
+                    if (bird.y - 15 < this.topHeight) {
+                        return true;
+                    }
+                    // Check collision with bottom pipe (which starts at this.topHeight + this.gap)
+                    if (bird.y + 15 > this.topHeight + this.gap) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        // Initialize game
+        function initGame() {
+            gameState.generation++;
+            gameState.score = 0;
+            gameState.birds = [];
+            // --- MODIFIED: Spawn pipe at edge of canvas ---
+            gameState.pipes = [new Pipe(canvas.width)];
+
+            // Auto-increase speed
+            if (config.autoSpeed && gameState.generation > 1) {
+                gameState.currentPipeSpeed = Math.min(8, config.pipeSpeed + (gameState.generation - 1) * 0.2);
+            } else {
+                gameState.currentPipeSpeed = config.pipeSpeed;
+            }
+
+            if (!gameState.population) {
+                gameState.population = new Population(config.popSize, 3, 1, config.hiddenNodes);
+            } else {
+                gameState.population.evolve();
+
+                // Update charts
+                const bestFitness = gameState.population.bestGenome.fitness;
+                const avgFitness = gameState.population.genomes.reduce((a, b) => a + b.fitness, 0) / gameState.population.genomes.length;
+
+                // --- ADDED: Calculate avg complexity ---
+                const avgComplexity = gameState.population.genomes.reduce((sum, genome) => sum + genome.connections.length, 0) / gameState.population.genomes.length;
+
+                gameState.fitnessHistory.push(bestFitness);
+                gameState.avgFitnessHistory.push(avgFitness);
+
+                fitnessChart.data.labels.push(gameState.generation - 1);
+                fitnessChart.data.datasets[0].data.push(bestFitness);
+                fitnessChart.data.datasets[1].data.push(avgFitness);
+                fitnessChart.update();
+
+                // --- MODIFIED: Update complexity chart ---
+                speciesChart.data.labels.push(gameState.generation - 1);
+                speciesChart.data.datasets[0].data.push(avgComplexity);
+                speciesChart.update();
+            }
+
+            // Create birds
+            for (let genome of gameState.population.genomes) {
+                gameState.birds.push(new Bird(genome));
+            }
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (!gameState.running || gameState.paused) return;
+
+            // --- MODIFIED: Scrolling Background ---
+            // Update background position
+            gameState.bgX -= gameState.currentPipeSpeed * 0.5; // Scroll at half speed
+            if (gameState.bgX < -canvas.width) {
+                gameState.bgX = 0;
+            }
+
+            // Draw background
+            if (spritesLoaded && sprites.bg.width > 0) {
+                ctx.drawImage(sprites.bg, gameState.bgX, 0, canvas.width, canvas.height);
+                ctx.drawImage(sprites.bg, gameState.bgX + canvas.width, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = '#87CEEB';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            // Update and draw pipes
+            for (let pipe of gameState.pipes) {
+                pipe.update();
+                pipe.draw();
+
+                // --- MODIFIED: Use dynamic pipe width ---
+                if (!pipe.passed && pipe.x + (sprites.pipe.width || 60) < 100) {
+                    pipe.passed = true;
+                    gameState.score++;
+                    gameState.birds.forEach(b => {
+                        if (b.alive) b.fitness += 5;
+                    });
+                }
+            }
+
+            // Add new pipes
+            // --- MODIFIED: Use dynamic width ---
+            if (gameState.pipes[gameState.pipes.length - 1].x < canvas.width - config.pipeDistance) {
+                gameState.pipes.push(new Pipe(canvas.width));
+            }
+
+            // Remove off-screen pipes
+            // --- MODIFIED: Use dynamic pipe width ---
+            gameState.pipes = gameState.pipes.filter(p => p.x > -(sprites.pipe.width || 60));
+
+            // Find next pipe
+            // --- MODIFIED: Use dynamic pipe width ---
+            let nextPipe = gameState.pipes.find(p => p.x + (sprites.pipe.width || 60) > 100);
+
+            // Update and draw birds
+            let aliveBirds = 0;
+            let bestBird = null;
+            let bestFitness = 0;
+
+            for (let bird of gameState.birds) {
+                if (!bird.alive) continue;
+
+                aliveBirds++;
+
+                // Neural network decision
+                if (nextPipe) {
+                    // --- MODIFIED: Normalize inputs by dynamic height ---
+                    const inputs = [
+                        bird.y / canvas.height,
+                        (nextPipe.topHeight - bird.y) / canvas.height,
+                        (nextPipe.topHeight + nextPipe.gap - bird.y) / canvas.height
+                    ];
+
+                    const output = bird.genome.activate(inputs);
+                    if (output[0] > 0.5) {
+                        bird.jump();
+                    }
+                }
+
+                bird.update();
+
+                // Check collisions
+                if (nextPipe && nextPipe.collidesWith(bird)) {
+                    bird.alive = false;
+                    bird.fitness -= 1;
+                }
+
+                bird.genome.fitness = bird.fitness;
+
+                if (bird.fitness > bestFitness) {
+                    bestFitness = bird.fitness;
+                    bestBird = bird;
+                }
+            }
+
+            // Draw all birds with debug lines
+            for (let i = 0; i < gameState.birds.length; i++) {
+                const bird = gameState.birds[i];
+                if (!bird.alive) continue;
+
+                const isBest = bird === bestBird;
+
+                // Skip if showBestOnly is enabled and this isn't the best bird
+                if (config.showBestOnly && !isBest) continue;
+
+                // Draw debug lines for all birds
+                if (config.showLines && nextPipe) {
+                    ctx.strokeStyle = isBest ? 'rgba(255, 0, 0, 0.8)' : 'rgba(255, 0, 0, 0.2)';
+                    ctx.lineWidth = isBest ? 2 : 1;
+                    ctx.beginPath();
+                    ctx.moveTo(bird.x, bird.y);
+                    // --- MODIFIED: Use dynamic pipe width ---
+                    ctx.lineTo(nextPipe.x + (sprites.pipe.width || 60) / 2, nextPipe.topHeight);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(bird.x, bird.y);
+                    ctx.lineTo(nextPipe.x + (sprites.pipe.width || 60) / 2, nextPipe.topHeight + nextPipe.gap);
+                    ctx.stroke();
+                }
+
+                // Draw bird
+                bird.draw();
+            }
+
+            // Update base position
+            gameState.baseX -= gameState.currentPipeSpeed;
+            if (gameState.baseX < -canvas.width) {
+                gameState.baseX = 0;
+            }
+
+            // Draw base
+            if (spritesLoaded && sprites.base.width > 0) {
+                ctx.drawImage(sprites.base, gameState.baseX, GROUND_LEVEL, canvas.width, BASE_HEIGHT);
+                ctx.drawImage(sprites.base, gameState.baseX + canvas.width, GROUND_LEVEL, canvas.width, BASE_HEIGHT);
+            } else {
+                ctx.fillStyle = '#DEB887';
+                ctx.fillRect(0, GROUND_LEVEL, canvas.width, canvas.height - GROUND_LEVEL);
+            }
+
+            // Update stats
+            document.getElementById('genStat').textContent = gameState.generation;
+            document.getElementById('scoreStat').textContent = gameState.score;
+            document.getElementById('aliveStat').textContent = aliveBirds + ' / ' + config.popSize;
+            document.getElementById('bestFitStat').textContent = bestFitness.toFixed(1);
+            document.getElementById('speciesStat').textContent = aliveBirds;
+
+            // Draw neural network of best bird
+            if (bestBird && config.showNN) {
+                drawNeuralNetwork(bestBird.genome, nextPipe, bestBird);
+                gameState.bestGenome = bestBird.genome;
+            } else if (!config.showNN) {
+                // Clear NN canvas if disabled
+                nnCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+                nnCtx.fillRect(0, 0, 300, 350);
+                nnCtx.fillStyle = 'white';
+                nnCtx.font = '14px Arial';
+                nnCtx.textAlign = 'center';
+                nnCtx.fillText('Neural Network Disabled', 150, 175);
+            }
+
+            // Check if all birds are dead
+            if (aliveBirds === 0) {
+                initGame();
+            }
+
+            setTimeout(() => requestAnimationFrame(gameLoop), 1000 / (30 * config.speed));
+        }
+
+        // Enhanced Neural Network Visualization with proper layer display
+        function drawNeuralNetwork(genome, pipe, bird) {
+            nnCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            nnCtx.fillRect(0, 0, 300, 350);
+
+            // Organize nodes by layer
+            const inputNodes = genome.nodes.filter(n => n.type === 'input');
+            const hiddenNodes = genome.nodes.filter(n => n.type === 'hidden');
+            const outputNodes = genome.nodes.filter(n => n.type === 'output');
+
+            const layerX = {
+                input: 40,
+                hidden: 150,
+                output: 260
+            };
+
+            // Calculate positions
+            const nodePositions = {};
+
+            // Input nodes
+            const inputSpacing = 80;
+            inputNodes.forEach((node, i) => {
+                nodePositions[node.id] = {
+                    x: layerX.input,
+                    y: 60 + i * inputSpacing
+                };
+            });
+
+            // Hidden nodes
+            if (hiddenNodes.length > 0) {
+                const hiddenSpacing = Math.min(60, 240 / hiddenNodes.length);
+                hiddenNodes.forEach((node, i) => {
+                    nodePositions[node.id] = {
+                        x: layerX.hidden,
+                        y: 60 + i * hiddenSpacing + (240 - hiddenNodes.length * hiddenSpacing) / 2
+                    };
+                });
+            }
+
+            // Output nodes
+            outputNodes.forEach((node, i) => {
+                nodePositions[node.id] = {
+                    x: layerX.output,
+                    y: 150
+                };
+            });
+
+            // Get input activations
+            let inputActivations = [0, 0, 0];
+            if (bird && pipe) {
+                // --- MODIFIED: Normalize inputs by dynamic height ---
+                inputActivations = [
+                    bird.y / canvas.height,
+                    (pipe.topHeight - bird.y) / canvas.height,
+                    (pipe.topHeight + pipe.gap - bird.y) / canvas.height
+                ];
+            }
+
+            // Set input values for visualization
+            inputNodes.forEach((node, i) => {
+                node.value = inputActivations[i];
+            });
+
+            // Draw connections with bright colors and thickness based on strength
+            for (let conn of genome.connections) {
+                if (!conn.enabled) continue;
+
+                const fromPos = nodePositions[conn.from];
+                const toPos = nodePositions[conn.to];
+
+                if (!fromPos || !toPos) continue;
+
+                const weight = conn.weight;
+                const absWeight = Math.abs(weight);
+                const normalizedWeight = Math.min(absWeight / 10, 1); // Normalize to 0-1
+
+                // Bright, vivid colors
+                const color = weight > 0
+                    ? `rgba(0, 255, 100, ${0.6 + normalizedWeight * 0.4})` // Bright green
+                    : `rgba(255, 50, 50, ${0.6 + normalizedWeight * 0.4})`; // Bright red
+
+                // Thickness based on weight strength (1-6 pixels)
+                const thickness = 1 + normalizedWeight * 5;
+
+                nnCtx.strokeStyle = color;
+                nnCtx.lineWidth = thickness;
+                nnCtx.beginPath();
+                nnCtx.moveTo(fromPos.x, fromPos.y);
+                nnCtx.lineTo(toPos.x, toPos.y);
+                nnCtx.stroke();
+            }
+
+            // Draw nodes
+            const inputLabels = ['Bird Y', 'Top Pipe', 'Bottom'];
+
+            // Input nodes
+            inputNodes.forEach((node, i) => {
+                const pos = nodePositions[node.id];
+                const activation = node.value;
+                const intensity = Math.abs(activation);
+
+                // Glow effect
+                const gradient = nnCtx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 20);
+                gradient.addColorStop(0, `rgba(0, 242, 254, ${intensity})`);
+                gradient.addColorStop(1, 'rgba(0, 242, 254, 0)');
+                nnCtx.fillStyle = gradient;
+                nnCtx.beginPath();
+                nnCtx.arc(pos.x, pos.y, 20, 0, Math.PI * 2);
+                nnCtx.fill();
+
+                // Node
+                nnCtx.fillStyle = '#00f2fe';
+                nnCtx.beginPath();
+                nnCtx.arc(pos.x, pos.y, 12, 0, Math.PI * 2);
+                nnCtx.fill();
+                nnCtx.strokeStyle = 'white';
+                nnCtx.lineWidth = 2;
+                nnCtx.stroke();
+
+                // Label
+                nnCtx.fillStyle = 'white';
+                nnCtx.font = '11px Arial';
+                nnCtx.textAlign = 'right';
+                nnCtx.fillText(inputLabels[i], pos.x - 18, pos.y + 4);
+            });
+
+            // Hidden nodes
+            hiddenNodes.forEach((node, i) => {
+                const pos = nodePositions[node.id];
+
+                nnCtx.fillStyle = '#9b59b6';
+                nnCtx.beginPath();
+                nnCtx.arc(pos.x, pos.y, 10, 0, Math.PI * 2);
+                nnCtx.fill();
+                nnCtx.strokeStyle = 'white';
+                nnCtx.lineWidth = 2;
+                nnCtx.stroke();
+
+                // Node number
+                nnCtx.fillStyle = 'white';
+                nnCtx.font = '9px Arial';
+                nnCtx.textAlign = 'center';
+                nnCtx.fillText(`H${i + 1}`, pos.x, pos.y + 3);
+            });
+
+            // Output nodes
+            outputNodes.forEach((node, i) => {
+                const pos = nodePositions[node.id];
+
+                // Glow for active output
+                if (node.value > 0.5) {
+                    const gradient = nnCtx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, 20);
+                    gradient.addColorStop(0, 'rgba(56, 239, 125, 0.8)');
+                    gradient.addColorStop(1, 'rgba(56, 239, 125, 0)');
+                    nnCtx.fillStyle = gradient;
+                    nnCtx.beginPath();
+                    nnCtx.arc(pos.x, pos.y, 20, 0, Math.PI * 2);
+                    nnCtx.fill();
+                }
+
+                nnCtx.fillStyle = '#38ef7d';
+                nnCtx.beginPath();
+                nnCtx.arc(pos.x, pos.y, 12, 0, Math.PI * 2);
+                nnCtx.fill();
+                nnCtx.strokeStyle = 'white';
+                nnCtx.lineWidth = 2;
+                nnCtx.stroke();
+
+                // Label
+                nnCtx.fillStyle = 'white';
+                nnCtx.font = '11px Arial';
+                nnCtx.textAlign = 'left';
+                nnCtx.fillText('Jump', pos.x + 18, pos.y + 4);
+            });
+
+            // Draw layer labels
+            nnCtx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            nnCtx.font = '10px Arial';
+            nnCtx.textAlign = 'center';
+            nnCtx.fillText('Input', layerX.input, 30);
+            if (hiddenNodes.length > 0) {
+                nnCtx.fillText('Hidden', layerX.hidden, 30);
+            }
+            nnCtx.fillText('Output', layerX.output, 30);
+
+            // Draw stats
+            nnCtx.fillStyle = 'white';
+            nnCtx.font = '12px Arial';
+            nnCtx.textAlign = 'left';
+            nnCtx.fillText(`Total Nodes: ${genome.nodes.length}`, 10, 310);
+            nnCtx.fillText(`Hidden: ${hiddenNodes.length}`, 10, 325);
+            nnCtx.fillText(`Connections: ${genome.connections.filter(c => c.enabled).length}`, 10, 340);
+            nnCtx.fillText(`Fitness: ${genome.fitness.toFixed(1)}`, 160, 310);
+            nnCtx.fillText(`Gen: ${gameState.generation}`, 160, 325);
+            nnCtx.fillText(`Speed: ${gameState.currentPipeSpeed.toFixed(1)}`, 160, 340);
+        }
+
+        document.getElementById('showBestOnly').onchange = (e) => {
+            config.showBestOnly = e.target.checked;
+        };
+
+        document.getElementById('showNN').onchange = (e) => {
+            config.showNN = e.target.checked;
+        };
+
+        // --- THIS IS THE KEY FIX ---
+        document.getElementById('playPauseBtn').onclick = function () {
+            if (!gameState.running) {
+                // --- MODIFIED: ALWAYS set canvas size on first play ---
+                // This ensures it matches the CSS dimensions *at the moment play is clicked*
+                canvas.width = canvas.clientWidth;
+                canvas.height = canvas.clientHeight;
+                GROUND_LEVEL = canvas.height - BASE_HEIGHT;
+
+                // Start game
+                gameState.running = true;
+                gameState.paused = false;
+                this.innerHTML = '⏸️ Pause';
+                if (gameState.birds.length === 0) {
+                    initGame();
+                }
+                gameLoop();
+            } else if (gameState.paused) {
+                // Resume
+                gameState.paused = false;
+                this.innerHTML = '⏸️ Pause';
+                gameLoop();
+            } else {
+                // Pause
+                gameState.paused = true;
+                this.innerHTML = '▶️ Play';
+            }
+        };
+
+        document.getElementById('resetBtn').onclick = () => {
+            gameState = {
+                running: false,
+                paused: false,
+                generation: 0,
+                score: 0,
+                birds: [],
+                pipes: [],
+                population: null,
+                bestGenome: null,
+                fitnessHistory: [],
+                avgFitnessHistory: [],
+                speciesHistory: [],
+                currentPipeSpeed: config.pipeSpeed
+            };
+
+            fitnessChart.data.labels = [];
+            fitnessChart.data.datasets[0].data = [];
+            fitnessChart.data.datasets[1].data = [];
+            fitnessChart.update();
+
+            speciesChart.data.labels = [];
+            speciesChart.data.datasets[0].data = [];
+            speciesChart.update();
+
+            // --- MODIFIED: Redraw welcome message on reset ---
+            setInitialCanvasState();
+
+            // Reset NN viz
+            nnCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            nnCtx.fillRect(0, 0, 300, 350);
+            nnCtx.fillStyle = 'white';
+            nnCtx.font = '16px Arial';
+            nnCtx.textAlign = 'center';
+            nnCtx.fillText('Neural Network Visualization', 150, 150);
+            nnCtx.font = '14px Arial';
+            nnCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            nnCtx.fillText('Will display during training', 150, 180);
+
+            // Reset stats
+            document.getElementById('genStat').textContent = '0';
+            document.getElementById('scoreStat').textContent = '0';
+            document.getElementById('aliveStat').textContent = '0';
+            document.getElementById('bestFitStat').textContent = '0';
+            document.getElementById('speciesStat').textContent = '0';
+
+            // Reset play button
+            document.getElementById('playPauseBtn').innerHTML = '▶️ Play';
+        };
+
+        // Config updates
+        document.getElementById('popSize').oninput = (e) => {
+            config.popSize = parseInt(e.target.value);
+            document.getElementById('popSizeVal').textContent = config.popSize;
+        };
+
+        document.getElementById('pipeGap').oninput = (e) => {
+            config.pipeGap = parseInt(e.target.value);
+            document.getElementById('pipeGapVal').textContent = config.pipeGap;
+        };
+
+        document.getElementById('pipeDist').oninput = (e) => {
+            config.pipeDistance = parseInt(e.target.value);
+            document.getElementById('pipeDistVal').textContent = config.pipeDistance;
+        };
+
+        document.getElementById('pipeSpeed').oninput = (e) => {
+            config.pipeSpeed = parseInt(e.target.value);
+            document.getElementById('pipeSpeedVal').textContent = config.pipeSpeed;
+            if (!config.autoSpeed) {
+                gameState.currentPipeSpeed = config.pipeSpeed;
+            }
+        };
+
+        document.getElementById('autoSpeed').onchange = (e) => {
+            config.autoSpeed = e.target.checked;
+        };
+
+        document.getElementById('connAdd').oninput = (e) => {
+            config.connAddProb = parseFloat(e.target.value);
+            document.getElementById('connAddVal').textContent = config.connAddProb.toFixed(1);
+        };
+
+        document.getElementById('connDel').oninput = (e) => {
+            config.connDelProb = parseFloat(e.target.value);
+            document.getElementById('connDelVal').textContent = config.connDelProb.toFixed(1);
+        };
+
+        document.getElementById('nodeAdd').oninput = (e) => {
+            config.nodeAddProb = parseFloat(e.target.value);
+            document.getElementById('nodeAddVal').textContent = config.nodeAddProb.toFixed(1);
+        };
+
+        document.getElementById('nodeDel').oninput = (e) => {
+            config.nodeDelProb = parseFloat(e.target.value);
+            document.getElementById('nodeDelVal').textContent = config.nodeDelProb.toFixed(1);
+        };
+
+        document.getElementById('weightMut').oninput = (e) => {
+            config.weightMutRate = parseFloat(e.target.value);
+            document.getElementById('weightMutVal').textContent = config.weightMutRate.toFixed(1);
+        };
+
+        document.getElementById('hiddenNodes').oninput = (e) => {
+            config.hiddenNodes = parseInt(e.target.value);
+            document.getElementById('hiddenNodesVal').textContent = config.hiddenNodes;
+        };
+
+        document.getElementById('elitism').oninput = (e) => {
+            config.elitism = parseInt(e.target.value);
+            document.getElementById('elitismVal').textContent = config.elitism;
+        };
+
+        document.getElementById('survival').oninput = (e) => {
+            config.survivalRate = parseFloat(e.target.value);
+            document.getElementById('survivalVal').textContent = config.survivalRate.toFixed(1);
+        };
+
+        document.getElementById('showLines').onchange = (e) => {
+            config.showLines = e.target.checked;
+        };
+
+        document.getElementById('speed').oninput = (e) => {
+            config.speed = parseInt(e.target.value);
+            document.getElementById('speedVal').textContent = config.speed + 'x';
+        };
+
+        // Section toggle
+        function toggleSection(header) {
+            const content = header.nextElementSibling;
+            const icon = header.querySelector('.toggle-icon');
+            content.classList.toggle('active');
+            icon.classList.toggle('rotated');
+        }
+
+        // --- ADDED: Function to draw welcome screen ---
+        function setInitialCanvasState() {
+            // Set canvas size to match CSS
+            // This needs to happen *before* drawing
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            GROUND_LEVEL = canvas.height - BASE_HEIGHT;
+
+            ctx.fillStyle = '#87CEEB';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw welcome message
+            ctx.fillStyle = 'white';
+            ctx.font = '30px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Flappy Bird NEAT AI Trainer', canvas.width / 2, canvas.height / 2 - 50);
+            ctx.font = '20px Arial';
+            ctx.fillText('Configure settings and click Play!', canvas.width / 2, canvas.height / 2);
+            ctx.font = '16px Arial';
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.fillText('Watch AI learn to play in real-time', canvas.width / 2, canvas.height / 2 + 50);
+        }
+
+        // --- MODIFIED: Initial setup ---
+        // Call it once on load
+        setInitialCanvasState();
+
+        // Redraw welcome message on resize *before* game starts
+        window.addEventListener('resize', () => {
+            if (!gameState.running) {
+                setInitialCanvasState();
+            } else {
+                // If game is running, just update dimensions
+                canvas.width = canvas.clientWidth;
+                canvas.height = canvas.clientHeight;
+                GROUND_LEVEL = canvas.height - BASE_HEIGHT;
+            }
+        });
+
+
+        nnCtx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        nnCtx.fillRect(0, 0, 300, 350);
+        nnCtx.fillStyle = 'white';
+        nnCtx.font = '16px Arial';
+        nnCtx.textAlign = 'center';
+        nnCtx.fillText('Neural Network Visualization', 150, 150);
+        nnCtx.font = '14px Arial';
+        nnCtx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        nnCtx.fillText('Will display during training', 150, 180);
+        nnCtx.fillText('Shows network architecture', 150, 200);
+        nnCtx.fillText('and live activations', 150, 220);
+    </script>
+</body>
+
+</html>
